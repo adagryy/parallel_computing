@@ -9,7 +9,7 @@
 #include <sys/mman.h>
 #include <time.h>
 
-#define N 7 /* sets number of processes*/
+#define N 25 /* sets number of processes*/
 #define BUFF_SIZE 8192 /*maximum amount of elements in vector*/
 
 key_t key = 5672, key2 = 5692; /*global keys for creating segments*/
@@ -46,12 +46,12 @@ void sum(int pid) {
     }
     int pom = (int) result[N];
     result[N]++;
-
     for(i = range[2 * pom]; i <= range[(2 * pom) + 1]; i++) {/*here is computing of partial sum*/
         sum += vector[i];
         // printf("%d+", vector[i]);
         // printf("> %d, %d <\n", range[2 * pom], range[2 * pom + 1]);
     }     
+    
     result[pom] = sum;/*...and writing it to the shared memory*/
     shmdt(result);/*these detache shared memory*/
     shmdt(range);
@@ -124,12 +124,12 @@ int main(){
         exit(1);
     }
 
-    int *tmp2 = malloc(2 * N * sizeof(int));
+    double *tmp2 = malloc(2 * N * sizeof(double));
     for(i = 0; i < 2 * N; i++){
-        tmp2[i] = 0;     
+        tmp2[i] = 0.0;     
     } 
 
-    memcpy(result, tmp2, 2 * N * sizeof(int));
+    memcpy(result, tmp2, 2 * N * sizeof(double));
     int s;
 
     for(i = 0; i < N; i++){
@@ -154,11 +154,15 @@ int main(){
         }
     }
 
-    sleep(1);/*suspend for a second*/
+    sleep(2);/*suspend for a two seconds*/
  
     clock_t time_start, time_end;
 
     time_start = clock();/*time_start, time_end - measure time of performing computations*/
+    /*Uncomment this code to display chlidren processes PIDs*/
+    // for(i = 0; i < N; i++){
+    //     printf("%d, ", pids[i]);
+    // }
 
     for( i = 0; i < N; i++){
        kill(pids[i], SIGUSR1);/*sending signals to the processes*/
@@ -175,7 +179,6 @@ int main(){
         suma += result[i];
     }
 
-    printf("N wynosi: %d\n", n);
     /*Uncomment to see "ranges" and "results" shared memory contents*/
     // for(i = 0; i <2 * N; i++){
     //     printf("%lf, ", result[i]);
@@ -184,6 +187,7 @@ int main(){
     // for(i = 0; i <2 * N; i++){
     //     printf("%d, ", range[i]);
     // }
+    // printf("\n");
 
     shmdt(result);/*detaching shared memory*/
     shmdt(range);
