@@ -1,0 +1,149 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h> /*deklaracje standardowych funkcji uniksowych (fork(), write() itd.)*/
+#define N 4 
+#include <sys/mman.h>
+#define BUFF_SIZE 100
+#define SIZE 27
+         key_t key, key2;
+volatile pid_t *pids;
+void on_usr1(int pid){}
+int n;
+double sum() {
+    int i;
+    double sum = 0.0f;
+                 if ((shmid = shmget(key, SIZE, IPC_CREAT | 0666)) < 0) {
+                    perror("shmget");
+                    exit(1);
+                }
+                if ((range = shmat(shmid, NULL, 0)) == (int*) -1) {
+                    perror("shmat");
+                    exit(1);
+                }
+
+
+                if ((shmid2 = shmget(key2, SIZE, IPC_CREAT | 0666)) < 0) {
+                    perror("shmget");
+                    exit(1);
+                }
+                if ((result = shmat(shmid2, NULL, 0)) == (double*) -1) {
+                    perror("shmat");
+                    exit(1);
+                }
+   
+    for(i=0; i<n; i++) {
+        sum += vector[i];
+    }
+    return sum;
+}
+int readFile(double *vector, char* fileName)//odczyt po linii
+{
+    FILE           *in = fopen(fileName, "r");
+    int i=0;
+    if (in != NULL) {
+        double          sum = 0;
+        double          x;
+        int n=0;
+        while (fscanf(in, "%lf", &x) == 1) {
+            vector[n]=x;
+            n++;
+        }
+        fclose(in);
+
+        return n;//ilosc elementow wektora 
+    } else
+        return -1;
+}
+int* podzial(int rangse, int n) {
+    int i;
+    int *array = malloc(2*N * sizeof(*array));
+    for(i = 0; i <  N; i++){
+        if(i != N - 1){
+            array[2 * i] = i * rangse;
+            array[2 * i + 1] = i * rangse + rangse - 1; 
+        }else{
+            array[2 * i] = i * rangse;
+            array[2 * i + 1] = n - 1;
+        }
+    }
+
+
+    return array;
+}
+int main(){
+    pid_t pid;
+    double *result;
+    int i, *range;
+    printf("Moj PID = %d\n", getpid());
+    for(i=0;i<N;i++){
+        pid=fork();
+
+        switch(pid){
+            case -1:
+                fprintf(stderr, "Blad w fork\n");
+                return EXIT_FAILURE;
+            case 0: /*proces potomny*/
+                printf("Jestem procesem potomnym. PID = %d\n", getpid());
+                sigset_t mask;
+                struct sigaction usr1;
+                sigemptyset(&mask); /* Wyczyść maskę */
+                usr1.sa_handler = (&sum);
+                usr1.sa_mask = mask;
+                usr1.sa_flags = SA_SIGINFO;
+                sigaction(SIGUSR1, &usr1, NULL);
+                pids[i]=getpid();
+                return 1;
+            default:
+                printf("Jestem procesem macierzystym. PID = %d\n", getpid());
+                double vector[BUFF_SIZE];
+               // int n;//ilosc elementow
+                n=readFile(vector,"vector.dat"); 
+                
+    pids = mmap(0, n*sizeof(pid_t), PROT_READ|PROT_WRITE,
+            MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if (!pids) {
+        perror("mmap failed");
+        exit(1);
+    }
+    memset((void *)pids, 0, n*sizeof(pid_t));
+
+                int shmid,shmid2;
+
+                key = 5678;//chyba srand trzeba
+                key2 = 5690;//tu też
+                //pamiec wspoldzielona
+                if ((shmid = shmget(key, SIZE, IPC_CREAT | 0666)) < 0) {
+                    perror("shmget");
+                    exit(1);
+                }
+                if ((range = shmat(shmid, NULL, 0)) == (int*) -1) {
+                    perror("shmat");
+                    exit(1);
+                }
+                range = podzial(n/N, n); 
+                for(i=0; i< 2*N; i++){
+                    printf("%d, ", range[i]);
+                }
+                printf("/n");
+
+                if ((shmid2 = shmget(key2, SIZE, IPC_CREAT | 0666)) < 0) {
+                    perror("shmget");
+                    exit(1);
+                }
+                if ((result = shmat(shmid2, NULL, 0)) == (double*) -1) {
+                    perror("shmat");
+                    exit(1);
+                }
+                result=malloc(N*sizeof(*result));
+                for(i=0;i< N; i++){
+			result[i] = -1;		
+		}
+                shmdt(result);
+        }
+    }
+}
